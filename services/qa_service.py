@@ -7,6 +7,8 @@ per-request cost, no data leaves the machine. Pull the model once with
 `ollama pull llama3` before running the app.
 """
 
+import re
+
 import httpx
 import ollama
 
@@ -19,10 +21,15 @@ SYSTEM_PROMPT = (
     "Answer the user's question using ONLY the information in the provided "
     "context excerpts from their document. "
     "If the context does not contain enough information to answer, say so "
-    "plainly instead of guessing. "
-    "When useful, mention which page an answer came from. "
-    "Be concise and accurate."
+    "plainly instead of guessing — never invent facts not present in the excerpts. "
+    "Every excerpt is labeled with its page number: cite the page number in "
+    "parentheses, e.g. '(page 3)', immediately after each claim you draw from it. "
+    "If a claim draws on multiple pages, cite all of them. "
+    "Keep answers short — a few sentences at most — and skip preamble like "
+    "'Based on the document'; just answer directly."
 )
+
+_WHITESPACE_RE = re.compile(r"\s+")
 
 
 class NoRelevantContextError(Exception):
@@ -36,6 +43,26 @@ class OllamaUnavailableError(Exception):
 class QAService:
     def __init__(self) -> None:
         self._client = ollama.Client(host=settings.ollama_host)
+
+    def _normalize_query(self, question: str) -> str:
+        """Clean up a raw user query before embedding it.
+
+        Collapses stray whitespace/newlines (common with copy-pasted
+        questions) and strips leading/trailing junk, so near-duplicate
+        queries embed identically instead of landing in slightly
+        different points in vector space.
+        """
+        return _WHITESPACE_RE.sub(" ", question).strip()
+
+    def _rerank(self, hits: list[dict], top_n: int) -> list[dict]:
+        """Rerank retrieved chunks by relevance score and keep the best few.
+
+        The vector store already returns hits in score order, but we
+        re-sort explicitly so reranking doesn't silently depend on that
+        implementation detail, then truncate to top_n so only the
+        strongest matches reach the LLM's limited context window.
+        """
+        return sorted(hits, key=lambda hit: hit.get("score", 0.0), reverse=True)[:top_n]
 
     def _build_context(self, hits: list[dict]) -> str:
         sections = []
@@ -52,14 +79,17 @@ class QAService:
                 f"No document found with id '{document_id}'. Upload it first via /upload."
             )
 
-        query_embedding = embedding_service.embed_query(question)
-        hits = retrieval_service.similarity_search(
+        query = self._normalize_query(question)
+        query_embedding = embedding_service.embed_query(query)
+        candidates = retrieval_service.similarity_search(
             query_embedding=query_embedding,
             document_id=document_id,
         )
 
-        if not hits:
+        if not candidates:
             raise NoRelevantContextError("No relevant content found in the document.")
+
+        hits = self._rerank(candidates, top_n=settings.rerank_top_n)
 
         context = self._build_context(hits)
         user_message = (

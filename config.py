@@ -24,15 +24,16 @@ class Settings(BaseSettings):
     embedding_model_name: str = "all-MiniLM-L6-v2"
 
     # --- Chunking ---
-    chunk_size: int = 1000
-    chunk_overlap: int = 200
+    chunk_size: int = 500
+    chunk_overlap: int = 50
 
     # --- Vector store ---
     chroma_persist_dir: str = "./chroma_db"
     chroma_collection_name: str = "documind"
 
     # --- Retrieval ---
-    retrieval_top_k: int = 4
+    retrieval_top_k: int = 5
+    rerank_top_n: int = 3
 
     # --- Uploads ---
     upload_dir: str = "./uploads"

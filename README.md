@@ -18,7 +18,8 @@ A RAG-based Document Q&A system. Upload a PDF, and ask natural-language question
                 └───────┬────────────┘
                         ▼
    Question  →  ┌────────────────────┐
-                │     qa_service     │  similarity search + Ollama (llama3, local)
+                │     qa_service     │  query normalization + similarity search +
+                │                    │  rerank-and-trim + Ollama (llama3, local)
                 └───────┬────────────┘
                         ▼
                      Answer + sources
@@ -147,9 +148,10 @@ All settings are environment variables (see `.env.example`):
 | `OLLAMA_MODEL` | `llama3` | Model used for answer generation (must be pulled via `ollama pull`) |
 | `OLLAMA_MAX_TOKENS` | `1024` | Max output tokens per answer (`num_predict`) |
 | `EMBEDDING_MODEL_NAME` | `all-MiniLM-L6-v2` | sentence-transformers model |
-| `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1000` / `200` | Text splitter parameters (chars) |
+| `CHUNK_SIZE` / `CHUNK_OVERLAP` | `500` / `50` | Text splitter parameters (chars) |
 | `CHROMA_PERSIST_DIR` | `./chroma_db` | Where ChromaDB stores its index |
-| `RETRIEVAL_TOP_K` | `4` | Chunks retrieved per question |
+| `RETRIEVAL_TOP_K` | `5` | Chunks retrieved per question, before reranking |
+| `RERANK_TOP_N` | `3` | Chunks kept after reranking, sent to the LLM as context |
 | `UPLOAD_DIR` | `./uploads` | Scratch directory for incoming PDFs |
 | `MAX_UPLOAD_SIZE_MB` | `25` | Max PDF upload size |
 
