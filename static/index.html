@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DocuMind — Document Q&amp;A</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e7e9ee;
+    --muted: #9aa3b2;
+    --accent: #6c8cff;
+    --error: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  main { width: 100%; max-width: 720px; }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  p.subtitle { color: var(--muted); margin-top: 0; margin-bottom: 28px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 1rem; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  input[type="file"] { color: var(--text); }
+  input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #11141a;
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+  button {
+    margin-top: 12px;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { margin-top: 10px; font-size: 0.9rem; color: var(--muted); }
+  .status.error { color: var(--error); }
+  .doc-pill {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 6px 10px;
+    background: #1f2937;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+  .answer { white-space: pre-wrap; line-height: 1.5; margin-top: 14px; }
+  .sources { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .sources h3 { font-size: 0.85rem; color: var(--muted); margin: 0 0 8px; }
+  .source-item {
+    font-size: 0.85rem;
+    color: var(--muted);
+    background: #11141a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+  }
+  .source-item b { color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>DocuMind</h1>
+  <p class="subtitle">Upload a PDF, then ask questions about it.</p>
+
+  <section class="panel">
+    <h2>1. Upload PDF</h2>
+    <input type="file" id="fileInput" accept="application/pdf" />
+    <br />
+    <button id="uploadBtn">Upload &amp; Index</button>
+    <div id="uploadStatus" class="status"></div>
+    <div id="docPill"></div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Ask a question</h2>
+    <input type="text" id="questionInput" placeholder="What is this document about?" />
+    <br />
+    <button id="askBtn" disabled>Ask</button>
+    <div id="askStatus" class="status"></div>
+    <div id="answer" class="answer"></div>
+    <div id="sources" class="sources" style="display:none;">
+      <h3>Sources</h3>
+      <div id="sourceList"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+  let currentDocumentId = null;
+
+  const uploadBtn = document.getElementById("uploadBtn");
+  const fileInput = document.getElementById("fileInput");
+  const uploadStatus = document.getElementById("uploadStatus");
+  const docPill = document.getElementById("docPill");
+
+  const askBtn = document.getElementById("askBtn");
+  const questionInput = document.getElementById("questionInput");
+  const askStatus = document.getElementById("askStatus");
+  const answerEl = document.getElementById("answer");
+  const sourcesEl = document.getElementById("sources");
+  const sourceListEl = document.getElementById("sourceList");
+
+  async function uploadFile() {
+    const file = fileInput.files[0];
+    if (!file) {
+      uploadStatus.textContent = "Choose a PDF file first.";
+      uploadStatus.className = "status error";
+      return;
+    }
+
+    uploadBtn.disabled = true;
+    uploadStatus.className = "status";
+    uploadStatus.textContent = "Uploading and indexing... this can take a moment.";
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Upload failed");
+
+      currentDocumentId = data.document_id;
+      uploadStatus.textContent = `Indexed "${data.filename}" into ${data.chunk_count} chunks.`;
+      docPill.innerHTML = `<span class="doc-pill">document_id: ${data.document_id}</span>`;
+      askBtn.disabled = false;
+    } catch (err) {
+      uploadStatus.textContent = err.message;
+      uploadStatus.className = "status error";
+    } finally {
+      uploadBtn.disabled = false;
+    }
+  }
+
+  async function askQuestion() {
+    const question = questionInput.value.trim();
+    if (!question) return;
+    if (!currentDocumentId) {
+      askStatus.textContent = "Upload a document first.";
+      askStatus.className = "status error";
+      return;
+    }
+
+    askBtn.disabled = true;
+    askStatus.className = "status";
+    askStatus.textContent = "Thinking...";
+    answerEl.textContent = "";
+    sourcesEl.style.display = "none";
+
+    try {
+      const res = await fetch("/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document_id: currentDocumentId, question }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to get an answer");
+
+      askStatus.textContent = "";
+      answerEl.textContent = data.answer;
+
+      if (data.sources && data.sources.length) {
+        sourceListEl.innerHTML = data.sources
+          .map(
+            (s) =>
+              `<div class="source-item"><b>Page ${s.page_number ?? "?"}</b> (score ${s.score}) — ${s.excerpt}...</div>`
+          )
+          .join("");
+        sourcesEl.style.display = "block";
+      }
+    } catch (err) {
+      askStatus.textContent = err.message;
+      askStatus.className = "status error";
+    } finally {
+      askBtn.disabled = false;
+    }
+  }
+
+  uploadBtn.addEventListener("click", uploadFile);
+  askBtn.addEventListener("click", askQuestion);
+  questionInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") askQuestion();
+  });
+</script>
+</body>
+</html>
