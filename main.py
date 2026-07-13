@@ -1,15 +1,3 @@
-"""
-DocuMind — RAG-based Document Q&A System.
-
-FastAPI application exposing:
-  POST /upload  - upload a PDF, chunk it, embed it, store it in ChromaDB
-  POST /ask     - ask a question about a previously uploaded document
-  GET  /health  - liveness/readiness check
-
-Swagger UI is available at /docs (FastAPI default), and a minimal
-frontend is served at /.
-"""
-
 import logging
 import os
 import uuid
@@ -50,8 +38,6 @@ Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# --- Schemas ---
-
 class UploadResponse(BaseModel):
     document_id: str
     filename: str
@@ -79,8 +65,6 @@ class HealthResponse(BaseModel):
     status: str
     service: str
 
-
-# --- Routes ---
 
 @app.get("/", include_in_schema=False)
 def root() -> FileResponse:
@@ -138,7 +122,7 @@ async def upload_document(file: UploadFile = File(...)) -> UploadResponse:
         )
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001 - convert unexpected failures into a 500
+    except Exception as exc:
         logger.exception("Failed to process upload")
         raise HTTPException(status_code=500, detail=f"Failed to process document: {exc}") from exc
     finally:

@@ -1,11 +1,3 @@
-"""
-ChromaDB vector store operations.
-
-Wraps a single persistent Chroma collection. Every chunk is stored with
-a `document_id` in its metadata so multiple uploaded PDFs can share one
-collection while queries can still be scoped to a specific document.
-"""
-
 import uuid
 
 import chromadb
@@ -33,7 +25,6 @@ class RetrievalService:
         chunks: list[Chunk],
         embeddings: list[list[float]],
     ) -> None:
-        """Store a document's chunks and their precomputed embeddings."""
         if len(chunks) != len(embeddings):
             raise ValueError("chunks and embeddings must be the same length")
 
@@ -58,7 +49,6 @@ class RetrievalService:
         top_k: int | None = None,
         document_id: str | None = None,
     ) -> list[dict]:
-        """Return the top_k most similar chunks, optionally scoped to one document."""
         results = self._collection.query(
             query_embeddings=[query_embedding],
             n_results=top_k or settings.retrieval_top_k,

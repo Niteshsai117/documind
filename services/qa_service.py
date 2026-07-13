@@ -1,12 +1,3 @@
-"""
-RAG pipeline: retrieve relevant chunks, then ask a local Ollama model to
-answer grounded only in that context.
-
-Uses Ollama (https://ollama.com) running on localhost — no API key, no
-per-request cost, no data leaves the machine. Pull the model once with
-`ollama pull llama3` before running the app.
-"""
-
 import re
 
 import httpx
@@ -33,11 +24,11 @@ _WHITESPACE_RE = re.compile(r"\s+")
 
 
 class NoRelevantContextError(Exception):
-    """Raised when no chunks are found for the requested document."""
+    pass
 
 
 class OllamaUnavailableError(Exception):
-    """Raised when the local Ollama server can't be reached, or the model isn't pulled."""
+    pass
 
 
 class QAService:
@@ -45,23 +36,9 @@ class QAService:
         self._client = ollama.Client(host=settings.ollama_host)
 
     def _normalize_query(self, question: str) -> str:
-        """Clean up a raw user query before embedding it.
-
-        Collapses stray whitespace/newlines (common with copy-pasted
-        questions) and strips leading/trailing junk, so near-duplicate
-        queries embed identically instead of landing in slightly
-        different points in vector space.
-        """
         return _WHITESPACE_RE.sub(" ", question).strip()
 
     def _rerank(self, hits: list[dict], top_n: int) -> list[dict]:
-        """Rerank retrieved chunks by relevance score and keep the best few.
-
-        The vector store already returns hits in score order, but we
-        re-sort explicitly so reranking doesn't silently depend on that
-        implementation detail, then truncate to top_n so only the
-        strongest matches reach the LLM's limited context window.
-        """
         return sorted(hits, key=lambda hit: hit.get("score", 0.0), reverse=True)[:top_n]
 
     def _build_context(self, hits: list[dict]) -> str:
@@ -73,7 +50,6 @@ class QAService:
         return "\n\n".join(sections)
 
     def answer_question(self, question: str, document_id: str) -> dict:
-        """Retrieve relevant chunks for document_id and generate an answer."""
         if not retrieval_service.document_exists(document_id):
             raise NoRelevantContextError(
                 f"No document found with id '{document_id}'. Upload it first via /upload."

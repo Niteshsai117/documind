@@ -1,12 +1,3 @@
-"""
-PDF parsing and chunking.
-
-Extracts raw text from a PDF with PyPDF2, then splits it into overlapping
-chunks with LangChain's RecursiveCharacterTextSplitter. Overlap preserves
-context across chunk boundaries so a fact split across two chunks is still
-retrievable from either one.
-"""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,7 +9,7 @@ from config import settings
 
 
 class PDFProcessingError(Exception):
-    """Raised when a PDF cannot be read or contains no extractable text."""
+    pass
 
 
 @dataclass
@@ -37,7 +28,6 @@ class PDFService:
         )
 
     def extract_text_by_page(self, pdf_path: str | Path) -> list[str]:
-        """Return a list of extracted text, one entry per PDF page."""
         try:
             reader = PdfReader(str(pdf_path))
         except (PdfReadError, OSError) as exc:
@@ -61,7 +51,6 @@ class PDFService:
         return pages
 
     def chunk_document(self, pdf_path: str | Path) -> list[Chunk]:
-        """Extract text from a PDF and split it into overlapping chunks."""
         pages = self.extract_text_by_page(pdf_path)
 
         chunks: list[Chunk] = []
